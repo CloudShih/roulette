@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>幸運轉盤</title>
+  <!-- 引入 Google Fonts: Roboto -->
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" rel="stylesheet">
+  <style>
+    /* 全域樣式與重置 */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Roboto', sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    /* 主要容器：70vh 高度、2rem padding，並以 flex 排列三欄 */
+    .main-container {
+      width: 100%;
+      height: 70vh;
+      padding: 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    /* 左側控制：區域數量輸入 */
+    .left-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .left-controls .sector-count {
+      font-size: 16px;
+    }
+    .left-controls .sector-count input {
+      margin-left: 0.5rem;
+      padding: 6px;
+      font-size: 16px;
+      width: 60px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    /* 中間輪盤區塊：尺寸為 70vh x 70vh */
+    .wheel-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 65vh;
+      height: 65vh;
+    }
+    #wheelCanvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid #333;
+    }
+    /* 紅色箭頭 */
+    .arrow {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 30px solid red;
+      z-index: 10;
+    }
+    /* 右側控制：區域名稱輸入 */
+    .right-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .right-controls .sector-names {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .right-controls .sector-names input {
+      padding: 6px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    /* 開始按鈕樣式 */
+    button {
+      margin-top: 40px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 500;
+      color: #fff;
+      background: linear-gradient(45deg, #4CAF50, #81C784);
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: linear-gradient(45deg, #388E3C, #66BB6A);
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+    <!-- 左側：區域數量輸入 -->
+    <div class="left-controls">
+      <div class="sector-count">
+        <label>區域數量：
+          <input type="number" id="sectorCount" value="10" min="2" max="20" onchange="updateSectors()">
+        </label>
+      </div>
+    </div>
+    <!-- 中間：輪盤 -->
+    <div class="wheel-container">
+      <div class="arrow"></div>
+      <canvas id="wheelCanvas"></canvas>
+      <button id="spinBtn" onclick="spinWheel()">開始</button>
+    </div>
+    <!-- 右側：區域名稱輸入 -->
+    <div class="right-controls">
+      <div class="sector-names" id="sectorInputs">
+        <!-- 此處將動態產生各區域的名稱輸入框 -->
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 定義各區塊背景色
+    const colors = ['#FF5733', '#33FF57', '#3357FF', '#F39C12', '#8E44AD', '#1ABC9C', '#E74C3C', '#2ECC71', '#3498DB', '#9B59B6'];
+    // 預設區域名稱：10個
+    let sectors = Array.from({ length: 10 }, (_, i) => `區域 ${i + 1}`);
+    // 輪盤旋轉相關變數
+    let currentRotation = 0;
+    let isSpinning = false;
+    let spinAnimationId = null;
+    
+    const canvas = document.getElementById("wheelCanvas");
+    const ctx = canvas.getContext("2d");
+    
+    // 根據 wheel-container 尺寸更新 canvas 大小
+    function updateCanvasSize() {
+      const wheelContainer = document.querySelector('.wheel-container');
+      const size = wheelContainer.clientHeight; // 70vh 對應的像素值
+      canvas.width = size;
+      canvas.height = size;
+      drawWheel();
+    }
+    
+    // 繪製輪盤
+    function drawWheel() {
+      const anglePerSector = (2 * Math.PI) / sectors.length;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      // 將畫布以中心點平移，依 currentRotation 旋轉
+      ctx.translate(centerX, centerY);
+      ctx.rotate(currentRotation);
+      ctx.translate(-centerX, -centerY);
+      
+      sectors.forEach((text, i) => {
+        const startAngle = i * anglePerSector;
+        const endAngle = startAngle + anglePerSector;
+        
+        // 畫扇形區塊
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, centerX, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        ctx.stroke();
+        
+        // 畫區域名稱：放置於扇形邊緣
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(startAngle + anglePerSector / 2);
+        ctx.textAlign = "right";
+        ctx.font = "14px Roboto";
+        ctx.fillStyle = "#000";
+        ctx.fillText(text, centerX - 10, 0);
+        ctx.restore();
+      });
+      ctx.restore();
+    }
+    
+    // 輪盤旋轉程序，每次按下「開始」按鈕時從目前角度旋轉 3 秒
+    function spinWheel() {
+      if (isSpinning) {
+        cancelAnimationFrame(spinAnimationId);
+      }
+      isSpinning = true;
+      
+      let randomSector = Math.floor(Math.random() * sectors.length);
+      const anglePerSector = (2 * Math.PI) / sectors.length;
+      let desiredRotation = -(randomSector * anglePerSector + anglePerSector / 2) - Math.PI / 2;
+      // 將 desiredRotation 正規化至 [0, 2π)
+      desiredRotation = ((desiredRotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      
+      const startRotation = currentRotation;
+      let currentMod = startRotation % (2 * Math.PI);
+      if (currentMod < 0) currentMod += 2 * Math.PI;
+      let extra = desiredRotation - currentMod;
+      if (extra < 0) extra += 2 * Math.PI;
+      
+      const extraSpins = 5; // 額外完整旋轉圈數
+      const finalRotation = startRotation + extraSpins * 2 * Math.PI + extra;
+      
+      const startTime = performance.now();
+      const duration = 3000; // 3秒
+      
+      function animate(time) {
+        let elapsed = time - startTime;
+        let progress = elapsed / duration;
+        if (progress > 1) progress = 1;
+        
+        // easeOutCubic 緩動函數
+        let easing = 1 - Math.pow(1 - progress, 3);
+        currentRotation = startRotation + easing * (finalRotation - startRotation);
+        drawWheel();
+        
+        if (progress < 1) {
+          spinAnimationId = requestAnimationFrame(animate);
+        } else {
+          isSpinning = false;
+          alert(`選中: ${sectors[randomSector]}`);
+        }
+      }
+      spinAnimationId = requestAnimationFrame(animate);
+    }
+    
+    // 更新區塊數目與右側區域名稱輸入欄
+    function updateSectors() {
+      const count = parseInt(document.getElementById("sectorCount").value);
+      sectors = Array.from({ length: count }, (_, i) => `區域 ${i + 1}`);
+      const sectorInputs = document.getElementById("sectorInputs");
+      sectorInputs.innerHTML = '';
+      sectors.forEach((name, i) => {
+        let input = document.createElement("input");
+        input.type = "text";
+        input.value = name;
+        input.onchange = () => {
+          sectors[i] = input.value;
+          drawWheel();
+        };
+        sectorInputs.appendChild(input);
+      });
+      drawWheel();
+    }
+    
+    // 初始化
+    updateSectors();
+    updateCanvasSize();
+    window.addEventListener("resize", updateCanvasSize);
+  </script>
+</body>
+</html>
